@@ -1,0 +1,1086 @@
+---
+title: "Trabajo de Investigacion"
+author: "Celia Ruiz, Marcela Barragán, Mariapaula Macedo"
+date: "12/07/19"
+output: html_document
+---
+
+## Estadistica para el analisis polico 2 - POL304 <br> 
+
+___
+
+##Legislación sobre el aborto a nivel mundial: ¿qué variables explican su nivel de restrictividad?
+
+I. índice 
+
+    * [1.Carga de datos](#Carga)
+    * [2.Limpieza de bases de datos](#Limpieza)
+    * [3.Aplicacion del merge](#Merge)
+    * [4.Descripcion de datos](#Descripcion)
+    * [5.Analisis factorial](#Factorial)
+    * [6.Analisis factorial de global gender gap](#factorial de global gender gap)
+    * [7.Analisis factorial de Indice de Desarrollo Humano](#factorial de indice de desarrollo humano)
+    * [8.Analisis factorial de Indice de Demcracia](#factorial de indice de democracia)
+    * [9.Merge con los nuevos scores] (#merge nuevos scores)
+    * [10.Mapa de similitudes con las componentes de IDH e Indice de Democracia](#mapa de similitudes con los componentes de las variables de indice de democracia e indice de desarrollo humano)
+    * [11.Analisis de regresion logistica ordinal](#regresion)
+    * [12.Regresion incluyendo a cobertura como un componente de idh](#regresion nuevo score)
+
+#Carga
+```{r}
+library(RCurl)
+library(openxlsx)
+library(bitops)
+library(tidyr)
+library(htmltab)
+
+#variable dependiente
+
+legislacionaborto=read.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQzuQ1_O29Kz_lTRIsDzqeSK13bQMNd44BZiyYB1VMwKskD2VSaLbcsQ9veN6NCFQ/pub?output=csv")
+
+#variable de global gender gap
+
+GGG=read.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vSXXectIgwpXrldVOdFz4bBoYnCpg2ZII7hmwQ1rNKn3OUCrVLnOPd0luM8VHbf3w/pub?gid=1235944979&single=true&output=csv")
+
+#variable de laicidad del Estado
+
+url="https://www.cia.gov/library/publications/the-world-factbook/fields/401.html"
+laicidad=htmltab(doc=url,which = '//*[@id="fieldListing"]',encoding=UTF-8)
+laicidad=as.data.frame(laicidad)
+
+#variable de religion mayoritaria de la poblacion por pais
+url2="https://www.cia.gov/library/publications/the-world-factbook/fields/401.html"
+religmayor=htmltab(doc=url2,which = '//*[@id="fieldListing"]',encoding=UTF-8)
+
+#variable de indice de democracia
+url3="https://en.wikipedia.org/wiki/Democracy_Index"
+dataDemocracia=htmltab(doc=url3,which='//*[@id="mw-content-text"]/div/table[2]', encoding="UTF-8")
+
+#variable de Indice de desarrollo humano
+
+url4 = "http://hdr.undp.org/en/composite/HDI" 
+idh = htmltab(doc = url4, which ='/html/body/div[2]/div/section/div/div/div/div/div/table',encoding = "UTF-8") 
+
+#variable de cobertura de salud
+
+UHC2=read.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vTXm_SOqXKH0YTQEH7OcBPtIBCf7yBNicFOkeHhlLlikNW4m4ipHswzlJAvLrdE1w/pub?gid=182815573&single=true&output=csv")
+```
+
+#Limpieza
+#variable dependiente
+```{r}
+names(legislacionaborto) #vemos los nombres de las variables y nos quedamos con las variables de interés: Pais y estatus legal del aborto
+legislacionaborto=legislacionaborto[,c(1,12)]
+
+#cambiamos el nombre de las variables 
+names(legislacionaborto)=c("Pais","aborto")
+#eliminamos las filas innecesaria 
+legislacionaborto=legislacionaborto[-c(1:3,201:2014),]
+row.names(legislacionaborto)=NULL
+#diccionario
+#1: To preserve a woman's life
+#2: To preserve a woman's physical health
+#3: To preserve a woman's mental health
+#4: In case of rape or incest
+#5: Because of foetal impairment
+#6: For economic or social reasons
+#7: On Request
+#Not permitted
+#altamente restrictivo = no permitido, 1
+#medianamente restrictivo= 2,3,4,5
+#poco o nada restrictivo = 6,7
+library(tidyr)
+legislacionaborto=separate(legislacionaborto,aborto,into =c( "aborto","delete1","delete2","delete3","delete4","delete5","delete6","detele"),"\\,")
+row.names(legislacionaborto)=NULL
+row.names(legislacionaborto[is.na(legislacionaborto$delete1),])
+#encontramos los casos con legislacion altamente restrictiva y les ponemos el nombre de la categoria
+legislacionaborto$aborto[c(1,4,5,6,14,25,33,35,39,42,48,50,51,52,54,55,63,70,72,74,75,76,82,83,91,96,97,99,103,104,108,109,110,113,119,125,132,134,135,137,150,151,153,160,161,163,165,166,168,172,176,178,183,193,195)]="altamente restrictivo"
+row.names(legislacionaborto[!is.na(legislacionaborto$delete6),])
+#identificamos los casos con legislacion poco o nada restrictiva y les ponemos el nombre de la categoria
+legislacionaborto$aborto[c(2,8,9,10,11,13,16,17,22,26,29,30,32,36,43,44,46,47,49,58,62,65,66,68,73,77,85,89,93,95,101,112,115,116,180,181,182,185,189,190,191,194)]="poco o nada restrictivo"
+row.names(legislacionaborto[!is.na(legislacionaborto$delete5),])
+#identificamos los casos con legislacion poco o nada restrictiva y le colocamos el nombre de la categoria 
+legislacionaborto$aborto[c(15,60,61,78,79,102,117,122,123,129,139,142,143,144,148,154,157,158,159,162,164,170,171,173,175)]="poco o nada restrictivo"
+
+legislacionaborto$Pais=as.character(legislacionaborto$Pais)
+#casos que faltan 
+legislacionaborto[c(18,196,187),2]="poco o nada restrictivo"
+legislacionaborto$aborto=gsub(1,"medianamente restrictivo",legislacionaborto$aborto)
+legislacionaborto=legislacionaborto[,-c(3:9)]
+#los cambiamos a un número para volverlos a ordinal
+legislacionaborto$aborto=gsub("altamente restrictivo",3,legislacionaborto$aborto)
+legislacionaborto$aborto=gsub("medianamente restrictivo",2,legislacionaborto$aborto)
+legislacionaborto$aborto=gsub("poco o nada restrictivo",1,legislacionaborto$aborto)
+legislacionaborto$aborto=as.numeric(legislacionaborto$aborto)
+#volemos ordinal nuestra variable dependiente
+niveles=c("poco o nada restrictivo","medianamente restrictivo","altamente restrictivo")
+legislacionaborto$abortoordinal=cut(legislacionaborto$aborto,
+                    breaks = length(niveles),
+                    labels = niveles,
+                    ordered_result = T)
+#eliminamos la variable original (no ordinal)
+legislacionaborto$aborto=NULL
+#cambiamos nombres de paises. 
+legislacionaborto[21,1]="Bolivia"
+legislacionaborto[29,1]="Cape Verde"
+legislacionaborto[42,1]="Cote d'Ivoire"
+legislacionaborto[47,1]="Korea, Dem. Rep."
+legislacionaborto[48,1]="Congo, Dem. Rep."
+legislacionaborto[81,1]="Iran"
+legislacionaborto[94,1]="Lao PDR"
+legislacionaborto[113,1]="Micronesia"
+legislacionaborto[141,1]="Korea"
+legislacionaborto[144,1]="Russia"
+legislacionaborto[151,1]="Saotome"
+legislacionaborto[166,1]="Palestine"
+legislacionaborto[172,1]="Syria"
+legislacionaborto[176,1]="Timor Leste"
+legislacionaborto[188,1]="Tanzania"
+legislacionaborto[193,1]="Venezuela"
+legislacionaborto[194,1]="Vietnam"
+str(legislacionaborto)
+```
+#Global Gender Gap
+```{r}
+library(tidyr)
+##cambiamos nombres de variables 
+names(GGG)=c("Pais","index")
+
+GGG=separate(GGG,index,into=c("delete1","globalindex","delete2","participacioneconomicayoportunidades","delete3","educacion","delete4","saludysupervivencia","delete5","empoderamientopolitico")," ")
+##eliminamos las variables innecesarias
+GGG=GGG[,-c(2,4,6,8,10,12)]
+##colocamos la variable país como caracter
+GGG$Pais=as.character(GGG$Pais)
+str(GGG)
+##colocamos las variables como numéricas
+GGG[,c(2:6)]=lapply(GGG[,c(2:6)],as.numeric)
+str(GGG)
+##cambiamos los nombres de las filas que se duplicarían de no ser cambiadas.
+GGG[133,1]="Cote d'Ivoire"
+GGG[98,1]="Gambia"
+GGG[141,1]="Iran"
+GGG[115,1]="Korea"
+GGG[1,1]="Iceland"
+GGG[75,1]="Russia"
+GGG[28,1]="United States of America"
+GGG[76,1]="Kyrgyzstan"
+```
+#laicidad del Estado
+```{r}
+names(laicidad)=c("Pais","delete")
+row.names(laicidad)=NULL
+laicidad$delete=NULL
+##creamos un vector que contiene los valores de laicidad
+laicdaddelestado=c(5,1,3,5,2,2,5,1,2,3,5,1,1,0,1,3,3,1,2,1,1,1,5,3,1,1,1,1,5,3,2,1,2,1,2,3,1,1,5,1,1,1,0,5,5,1,3,5,5,5,3,5,1,0,5,1,1,3,3,1,3,1,3,1,2,2,1,5,1,5,5,5,1,2,1,5,1,1,5,2,1,1,5,3,5,1,5,2,5,1,1,1,2,5,2,1,1,3,1,2,3,3,1,5,3,2,1,1,5,3,0,1,1,5,5,1,3,0,2,1,1,1,2,3,3,2,1,1,1,1,3,3,1,3,1,3,1,1,5,2,3,2,1,5,3,1,1,1,1,1,5,1,2,1,1,5,5,5,5,3,3,3,1,2,2,2,2,1,5,2,1,5,3,2,2,1,5,5,5,5,5,5,5,2,1,1,3,1,2,1,1,1,5,1,1,1,3,1,1,2,2,2,1,1,1,2,1,0,1,1,1,2,5,2,1,3,2,0,5,3,1,1,3,3,1,1,0,1,1,0,5,5,5,3,5,3,3,1)
+#diccionario
+#0=tiene relacion hostil con la religion
+#1=no religion oficial y no favorece a ninguna religion
+#2= favorece  
+#3= tiene una religión oficial
+#5=NA
+#source 
+#https://www.pewforum.org/2017/10/03/many-countries-favor-specific-religions-officially-or-unofficially/ 
+laicidad$laicidaddelestado=laicdaddelestado
+
+laicidad$laicidaddelestado=as.factor(laicidad$laicidaddelestado)
+laicidad=laicidad[-c(233,235),] ##eliminé world y west bank 
+row.names(laicidad)=NULL
+table(laicidad$laicidaddelestado)
+##por ahora hay 50 NA's
+grep(3,laicidad$laicidaddelestado)
+##completamos casos
+laicidad[1,2]=3
+laicidad[49,2]=1
+laicidad[48,2]=1
+laicidad[85,2]=3
+laicidad[114,2]=0
+laicidad[115,2]=1
+laicidad[139,2]=1
+library(tidyr)
+##reemplazamos los 5 por NA
+laicidad$laicidaddelestado=gsub(5,NA,laicidad$laicidaddelestado)
+#casos completos
+laicidad=laicidad[complete.cases(laicidad),]
+#volvemos a factor
+laicidad$laicidaddelestado=as.numeric(laicidad$laicidaddelestado)
+row.names(laicidad)=NULL
+##cambiamos el nombre de los países 
+laicidad$Pais[12]="Bahamas"
+laicidad$Pais[30]="Cape Verde"
+laicidad$Pais[40]="Congo, Dem. Rep."
+laicidad$Pais[41]="Congo"
+laicidad$Pais[62]="Gambia"
+laicidad$Pais[71]="Guinea-Bissau"
+laicidad$Pais[91]="Korea, Dem. Rep."
+laicidad$Pais[92]="Korea"
+laicidad$Pais[116]="Micronesia"
+laicidad$Pais[148]="Saotome"
+laicidad$Pais[172]="Timor Leste"
+laicidad$Pais[184]="United States of America"
+laicidad$Pais[46]="Czech Republic"
+niveles2=c('relación hostil','no tiene religion oficial','favorece a una religion','tiene religion oficial')
+laicidad$laicidadordinal=cut(laicidad$laicidaddelestado,breaks = length(niveles2),labels = niveles2,ordered_result = T)
+str(laicidad)
+
+```
+
+#Religion mayoritaria de la poblacion de un pais
+```{r}
+names(religmayor)=c("Pais","religion")
+religmayor=separate(religmayor,religion,into = c("religion","eliminar"),"\\%")
+religmayor$eliminar=NULL
+religmayor=separate(religmayor,religion,into = c("religion","eliminar"),"\\(")
+religmayor$eliminar=NULL
+religmayor=separate(religmayor,religion,into = c("religion","eliminar"),"and")
+religmayor$eliminar=NULL
+religmayor=separate(religmayor,religion,into = c("religion","eliminar"),"\\,")
+religmayor$eliminar=NULL
+religmayor=separate(religmayor,religion,into =c ("religion","del1","del2","del3","del4")," ")
+religmayor=religmayor[,-c(4,5,6)]
+row.names(religmayor)=NULL
+religmayor[9,2]="Roman"
+religmayor[10,2]="Christian"
+religmayor[229,2]="Roman"
+religmayor[213,2]="Christian"
+religmayor[204,2]="Lutheran"
+religmayor[202,2]="Muslim"
+religmayor[197,2]="Muslim"
+religmayor[175,2]="Orthodox"
+religmayor[174,2]="Orthodox"
+religmayor[160,2]="Lutheran"
+religmayor[114,2]="Buddhist"
+religmayor[132,2]="Muslim"
+religmayor[98,2]="Lutheran"
+religmayor[85,2]="Lutheran"
+religmayor[84,2]="Orthodox"
+religmayor[69,2]="Orthodox"
+religmayor[66,2]="Muslim"
+religmayor[65,2]="Christian"
+religmayor[59,2]="Muslim"
+religmayor[58,2]="Lutheran"
+religmayor[47,2]="Muslim"
+religmayor[31,2]="Orthodox"
+religmayor[24,2]="Buddhist"
+religmayor$del1=NULL
+religmayor$religion=gsub("Roman","Catolica",religmayor$religion)
+religmayor$religion=gsub("Protestant","Protestante",religmayor$religion)
+religmayor$religion=gsub("Muslim","Musulmana",religmayor$religion)
+religmayor$religion=gsub("Christian","Cristiana",religmayor$religion)
+religmayor$religion=gsub("Orthodox","Ortodoxa",religmayor$religion)
+religmayor$religion=gsub("Buddhist","Budista",religmayor$religion)
+religmayor$religion=gsub("Lutheran","luteranismo",religmayor$religion)
+religmayor$religion=gsub("Jewish","Judia",religmayor$religion)
+religmayor$religion=gsub("Animist","Animista",religmayor$religion)
+religmayor$religion=gsub("Catholic","Catolica",religmayor$religion)
+religmayor=religmayor[-c(235,234,233,158,96),]
+row.names(religmayor)=NULL
+religmayor$religion=as.factor(religmayor$religion)
+religmayor[15,1]="Bahamas"
+religmayor[35,1]="Cape Verde"
+religmayor[48,1]="Congo, Dem. Rep."
+religmayor[49,1]="Congo"
+religmayor[57,1]="Czech Republic"
+religmayor[78,1]="Gambia"
+religmayor[91,1]="Guinea-Bissau"
+religmayor[94,1]="Holy See"
+religmayor[113,1]="Korea, Dem. Rep."
+religmayor[114,1]="Korea"
+religmayor[138,1]="Micronesia"
+religmayor[182,1]="Saotome"
+religmayor[209,1]="Timor Leste"
+religmayor[223,1]="United States of America"
+```
+```{r}
+library(htmltab)
+link1="https://en.wikipedia.org/wiki/Democracy_Index"
+dataDemocracia=htmltab(doc=link1,which='//*[@id="mw-content-text"]/div/table[2]', encoding="UTF-8")
+dataDemocracia$`Rank >> Rank`=NULL
+dataDemocracia$`Regimetype >> Regimetype`=NULL
+dataDemocracia[,c(2:7)]=lapply(dataDemocracia[,c(2:7)],as.numeric)
+names(dataDemocracia)= c("Pais","Scoredemo","Pluralismo","Funcionalidad","Participacion politica","Cultura politica","Libertad civil")
+dataDemocracia$Pais=gsub("\\Â" , "", dataDemocracia$Pais)
+
+row.names(dataDemocracia)=NULL
+dataDemocracia$Pais=trimws(dataDemocracia$Pais,whitespace = "[ \\h\\v]")
+library(stringr)
+str_trim(dataDemocracia$Pais)
+str_squish(dataDemocracia$Pais)
+dataDemocracia[165,1]="Congo, Dem. Rep."
+dataDemocracia[157,1]="Guinea-Bissau"
+dataDemocracia[113,1]="Cote d'Ivoire"
+dataDemocracia[167,1]="Korea, Dem. Rep."
+dataDemocracia[131,1]="Congo"
+dataDemocracia[21,1]="Korea"
+dataDemocracia[42,1]="Timor Leste"
+dataDemocracia[25,1]="United States of America"
+dataDemocracia=as.data.frame(dataDemocracia)
+```
+#Indice de desarrollo humano
+```{r}
+names(idh)=c("Puesto","Pais","PuntajeHDI","AñosVida","AñosEducacion","MedianaAñosEdu","PBI","PBImenosPuesto","Puesto2016")
+idh=idh[-c(1),]
+idh=idh[-c(60),]
+row.names(idh)=NULL
+idh=idh[-c(113,153,192:215),]
+idh$PBI =   gsub("\\,", "", idh$PBI)
+idh$PBImenosPuesto=NULL
+idh$Puesto2016=NULL
+idh$Puesto=NULL
+idh$PBI = as.numeric(idh$PBI)
+idh$MedianaAñosEdu = as.numeric(idh$MedianaAñosEdu)
+idh$AñosEducacion = as.numeric(idh$AñosEducacion)
+idh$AñosVida = as.numeric(idh$AñosVida)
+idh$PuntajeHDI = as.numeric(idh$PuntajeHDI)
+row.names(idh)=NULL
+idh$Pais[118]="Bolivia"
+idh$Pais[125]="Cape Verde"
+idh$Pais[176]="Congo, Dem. Rep."
+idh$Pais[170]="Cote d'Ivoire"
+idh$Pais[27]="Czech Republic"
+idh$Pais[177]="Guinea-Bissau"
+idh$Pais[7]="Hong Kong"
+idh$Pais[60]="Iran"
+idh$Pais[23]="Korea"
+idh$Pais[139]="Lao PDR"
+idh$Pais[131]="Micronesia"
+idh$Pais[112]="Moldova"
+idh$Pais[119]="Palestine"
+idh$Pais[49]="Russia"
+idh$Pais[143]="Saotome"
+idh$Pais[155]="Syria"
+idh$Pais[154]="Tanzania"
+idh$Pais[132]="Timor Leste"
+idh$Pais[13]="United States of America"
+idh$Pais[78]="Venezuela"
+idh$Pais[117]="Vietnam"
+```
+#cobertura de salud
+```{r}
+UHC2$Series.Name=NULL
+UHC2$Series.Code=NULL
+UHC2$Country.Code=NULL
+UHC2$X1990..YR1990.=NULL
+UHC2$X2000..YR2000.=NULL
+UHC2$X2006..YR2006.=NULL
+UHC2$X2007..YR2007.=NULL
+UHC2$X2008..YR2008.=NULL
+UHC2$X2009..YR2009.=NULL
+UHC2$X2010..YR2010.=NULL
+UHC2$X2011..YR2011.=NULL
+UHC2$X2012..YR2012.=NULL
+UHC2$X2013..YR2013.=NULL
+UHC2$X2014..YR2014.=NULL
+names(UHC2)=c("Pais","Porcentaje de cobertura")
+UHC2$`Porcentaje de cobertura`=gsub("\\..",NA, UHC2$`Porcentaje de cobertura`)
+UHC2=UHC2[-c(218:250),]
+UHC2$`Porcentaje de cobertura`=as.numeric(UHC2$`Porcentaje de cobertura`)
+UHC2$Pais=as.character(UHC2$Pais)
+library(dplyr)
+UHC2 %>% mutate_if(is.factor, as.character) -> UHC2
+##llenamos casos vacíos 
+UHC2[3,2]=76
+UHC2[7,2]=75
+UHC2[14,2]=72
+UHC2[15,2]=72
+UHC2[17,2]=79
+UHC2[20,2]=61
+UHC2[23,2]=59
+UHC2[29,2]=80
+UHC2[38,2]=33
+UHC2[44,2]=47
+UHC2[46,2]=38
+UHC2[50,2]=78
+UHC2[60,2]=77
+UHC2[61,2]=45
+UHC2[62,2]=38
+UHC2[69,2]=80
+UHC2[72,2]=46
+UHC2[79,2]=72
+UHC2[84,2]=68
+UHC2[85,2]=47
+UHC2[93,2]=63
+UHC2[103,2]=40
+UHC2[107,2]=77
+UHC2[114,2]=63
+UHC2[129,2]=60
+UHC2[136,2]=60
+UHC2[137,2]=59
+UHC2[140,2]=80
+UHC2[142,2]=80
+UHC2[153,2]=41
+UHC2[160,2]=77
+UHC2[164,2]=56
+UHC2[167,2]=68
+UHC2[170,2]=68
+UHC2[172,2]=80
+UHC2[176,2]=50
+UHC2[177,2]=22
+UHC2[179,2]=30
+UHC2[183,2]=69
+UHC2[185,2]=65
+UHC2[186,2]=43
+UHC2[187,2]=68
+UHC2[190,2]=60
+UHC2[196,2]=62
+UHC2[197,2]=75
+UHC2[200,2]=67
+UHC2[205,2]=63
+UHC2[209,2]=72
+UHC2[210,2]=56
+UHC2[211,2]=73
+UHC2[217,2]=55
+
+##cambiamos nombres 
+UHC2[14,1]="Bahamas"
+UHC2[33,1]="Cape Verde"
+UHC2[46,1]="Congo"
+UHC2[59,1]="Egypt"
+UHC2[72,1]="Gambia"
+UHC2[83,1]="Guinea Bissau"
+UHC2[87,1]="Hong Kong"
+UHC2[92,1]="Iran"
+UHC2[104,1]="Korea, Dem. Rep."
+UHC2[105,1]="Korea"
+UHC2[129,1]="Micronesia"
+UHC2[162,1]="Russia"
+UHC2[166,1]="Saotome"
+UHC2[174,1]="Slovakia"
+UHC2[182,1]="Saint Kitts and Nevis"
+UHC2[183,1]="Saint Lucia"
+UHC2[184,1]="Saint Martin"
+UHC2[185,1]="Saint Vincent and the Grenadines"
+UHC2[190,1]="Syria"
+UHC2[194,1]="Timor Leste"
+UHC2[207,1]="United States of America"
+UHC2[211,1]="Venezuela"
+UHC2[215,1]="Yemen"
+UHC2[108,1]="Kyrgyzstan"
+names(UHC2)=c("Pais","cobertura")
+```
+
+####**3.AplicaciÃ³n del merge**
+#merge
+
+```{r}
+#merge de la variable dependiente con la variable de global gender gap
+total1=merge(legislacionaborto,GGG,by="Pais",all.x = T,all.y = T)
+#merge de la variable total1 con laicidad
+total2=merge(total1,laicidad,by="Pais",all.y = T,all.x = T)
+total2$laicidaddelestado=NULL
+#merge con variable religion mayoritaria de la poblacion
+total3=merge(total2,religmayor,by="Pais",all.x = T,all.y = T)
+#merge con la variable democracy index
+total4=merge(total3,dataDemocracia,by="Pais",all.x = T,all.y = T)
+#merge con la variable IDH
+total5=merge(total4,idh,by="Pais",all.x = T,all.y = T)
+#merge con la variable cobertura de salud
+total=merge(total5,UHC2,by="Pais", all.x=T,all.y=T)
+
+total=total[complete.cases(total),]
+row.names(total)=NULL
+row.names(total)=total$Pais
+total$Pais=NULL
+#en total nos quedan 134 casos! 
+```
+
+#Descripcion
+
+#analisis exploratorio. 
+```{r}
+#de la data final con los casos completos (variable dependiente)
+library(DescTools)
+Mode(total$abortoordinal)
+Median(total$abortoordinal, na.rm=T)
+```
+
+```{r}
+
+toPlot=prop.table(table(total$abortoordinal))*100
+barplot(toPlot,xlab = 'Tipo de legislación con respecto al aborto',ylab='conteo de paises',col=c('#f3c4ca','#cb7782','#da3c50'),main='porcentaje de países según legislación sobre el aborto')
+prop.table(table(total$abortoordinal))*100
+```
+
+
+```{r}
+##de la data original de la variable dependiente.
+library(DescTools)
+Mode(legislacionaborto$abortoordinal)
+Median(legislacionaborto$abortoordinal, na.rm=T)
+```
+
+
+```{r}
+toPlot=prop.table(table(legislacionaborto$abortoordinal))*100
+colores=c('#f3c4ca','#cb7782','#da3c50')
+barplot(toPlot,xlab = 'Tipo de legislación con respecto al aborto',ylab='conteo de paises',col=colores,main='porcentaje de países según legislación sobre el aborto')
+prop.table(table(legislacionaborto$abortoordinal))*100
+summary(legislacionaborto$abortoordinal)
+```
+podemos notar que hemos perdido casos con legislación sobre el aborto altamente restrictiva. 
+
+```{r}
+
+#Mapa de la variable dependiente 
+archivo2='Cuaderno Marcela'
+fileName2='world_map.shp' 
+fileToRead2=file.path(archivo2,fileName2)
+library(rgdal)
+mapamundo2 <- readOGR(fileToRead2,stringsAsFactors=FALSE)
+plot(mapamundo2, border='black')
+```
+```{r}
+head(mapamundo2@data)
+```
+```{r}
+legislacionaborto3=legislacionaborto
+names(legislacionaborto3)=c("NAME","aborto")
+mapamundo_legislacionaborto=merge(mapamundo2,legislacionaborto3)
+```
+```{r}
+Colors=c("#f3c4ca","#cb7782","#da3c50")
+
+
+plot(mapamundo2,col='snow2',border=NA)
+plot(mapamundo_legislacionaborto,col=Colors[mapamundo_legislacionaborto$aborto],main='Grupos',border=NA,add=T)
+```
+
+```{r}
+#mapa interactivo de la variable dependiente!
+library(leaflet)
+
+mapamundo_legislacionaborto$aborto=gsub("poco o nada restrictivo",1,mapamundo_legislacionaborto$aborto)
+mapamundo_legislacionaborto$aborto=gsub("medianamente restrictivo",2,mapamundo_legislacionaborto$aborto)
+mapamundo_legislacionaborto$aborto=gsub("altamente restrictivo",3,mapamundo_legislacionaborto$aborto)
+c1=mapamundo_legislacionaborto[!is.na(mapamundo_legislacionaborto$aborto) &mapamundo_legislacionaborto$aborto==1,]
+c2=mapamundo_legislacionaborto[!is.na(mapamundo_legislacionaborto$aborto) & mapamundo_legislacionaborto$aborto==2,]
+c3=mapamundo_legislacionaborto[!is.na(mapamundo_legislacionaborto$aborto) & mapamundo_legislacionaborto$aborto==3,]
+
+title="aborto"
+
+# base Layer
+base= leaflet() %>% addProviderTiles("CartoDB.Positron") 
+
+layer1= base %>%
+        addPolygons(data=c1,color=' #f3c4ca',fillOpacity = 1,stroke = F,
+                    group = "1")
+layer_12= layer1%>%addPolygons(data=c2,color="#cb7782",fillOpacity = 1,stroke = F,
+                              group = "2")
+
+layer_123= layer_12%>%addPolygons(data=c3,color="#da3c50",fillOpacity = 1,stroke = F,
+                              group = "3")
+
+
+
+layer_123
+
+```
+
+
+```{r}
+##HDI
+summary(total$PuntajeHDI) ##data final con casos completos
+summary(idh$PuntajeHDI) ##data original del hdi index
+#podemos notar que hemos perdido casos con bajo idh como el mínimo que era de 3540.
+library(Hmisc)
+describe(total$PuntajeHDI)
+describe(idh$PuntajeHDI)
+library(ggplot2)
+hist(total$PuntajeHDI,freq=FALSE,col="#5cc2a7",main = "Índice de desarrollo humano") ##se considera a los casos finales 
+ggplot(total,aes(y=PuntajeHDI,x=1)) + geom_boxplot() + coord_flip()
+hist(idh$PuntajeHDI,freq=FALSE,col="#5cc2a7",main = "Índice de desarrollo humano") #de la data original
+```
+
+
+```{r}
+##laicidad en el mundo según data original
+table(laicidad$laicidadordinal)
+prop.table(table(laicidad$laicidadordinal))*100
+library(DescTools)
+Mode(laicidad$laicidadordinal)
+Median(laicidad$laicidadordinal)
+toPlot3=prop.table(table(laicidad$laicidadordinal))*100
+barplot(toPlot3,xlab = 'relación Estado-Religión',ylab='conteo de paises',col=c('#fe927a','#f96b4b','#ca4b2f','#8b3420'),main='porcentaje de países según tipo de relación Estado-Religión')
+
+##analisis exploratorio de la data final con los casos considerados en la regresión
+#laicidad
+library(DescTools)
+Mode(total$laicidadordinal)
+Median(total$laicidadordinal)
+toPlot3=prop.table(table(total$laicidadordinal))*100
+barplot(toPlot3,xlab = 'relación Estado-Religión',ylab='conteo de paises',col=c('#fe927a','#f96b4b','#ca4b2f','#8b3420'),main='porcentaje de países según tipo de relación Estado-Religión')
+table(total$laicidadordinal)
+prop.table(table(total$laicidadordinal))*100
+#en este caso, no se ve mucha diferencia en la distribución de los porcentajes en la variable original y la variable utilizada en el modelo
+```
+
+
+```{r}
+##análisis exploratorio de cobertura de salud
+##data original UHC2
+library(Hmisc)
+describe(UHC2$cobertura)
+hist(UHC2$cobertura,freq=FALSE,col = "#2a89b9",main = "Cobertura de salud")
+ggplot(UHC2,aes(y=cobertura,x=1)) + geom_boxplot() + coord_flip()
+summary(UHC2$cobertura)
+
+##análisis exploratorio con la data final y casos que se han usado
+
+library(Hmisc)
+describe(total$cobertura)
+hist(total$cobertura,freq=FALSE,col = "#2a89b9",main = "Cobertura de salud")
+ggplot(total,aes(y=cobertura,x=1)) + geom_boxplot() + coord_flip()
+summary(total$cobertura)
+```
+
+
+```{r}
+##análisis exploratorio de índice de democracia 
+library(Hmisc)
+describe(dataDemocracia$Scoredemo)
+hist(dataDemocracia$Scoredemo,freq = FALSE,col = "#60509d")
+ggplot(dataDemocracia,aes(y=Scoredemo,x=1)) + geom_boxplot() + coord_flip()
+summary(dataDemocracia$Scoredemo)
+#análisis exploratorio con los casos de la data de democracia que se usaron
+
+describe(total$Scoredemo)
+hist(total$Scoredemo,freq = FALSE,col = "#60509d")
+ggplot(total,aes(y=Scoredemo,x=1)) + geom_boxplot() + coord_flip()
+summary(total$Scoredemo)
+#perdimos casos con índice de democracia bajos y por lo tanto en la data final aumento la proporcion de caos con indices mas altos
+```
+
+
+```{r}
+#análisis exploratorio de la variable religión mayoritaria de la población de un país
+library(DescTools)
+Mode(religmayor$religion)
+Median(religmayor$religion)
+prop.table(table(religmayor$religion))*100
+toPlot4=prop.table(table(religmayor$religion))*100
+barplot(toPlot4,col=heat.colors(15),
+        xlab="Religión", 
+        ylab="%de países",
+        main="Distribucion religiones mayoritarias de la población por país")
+#análisis exploratorio de religión mayoritaria de la población según país de los casos considerados
+library(DescTools)
+Mode(total$religion)
+Median(total$religion)
+prop.table(table(total$religion))*100
+toPlot4=prop.table(table(total$religion))*100
+barplot(toPlot4,col=heat.colors(15),
+        xlab="Religión", 
+        ylab="%de países",
+        main="Distribucion religiones mayoritarias de la población por país")
+
+#perdimos casos con religiones menos frecuentes 
+```
+
+
+```{r}
+##analisis exploratorio de la variable Global Gender Gap con los casos originales 
+summary(GGG$globalindex)
+library(Hmisc)
+describe(GGG$globalindex)
+summary(GGG$globalindex)
+hist(GGG$globalindex,main="Histograma de Global Gender Gap", freq = FALSE,col = "#e4f4a3")
+ggplot(GGG,aes(y=globalindex,x=1)) + geom_boxplot() + coord_flip()
+
+#análisis de global gender gap para los casos considerados
+describe(total$globalindex)
+summary(total$globalindex)
+hist(total$globalindex,main="Histograma de Global Gender Gap", freq = FALSE,col = "#e4f4a3")
+ggplot(total,aes(y=globalindex,x=1)) + geom_boxplot() + coord_flip()
+```
+
+#factorial
+
+```{r}
+#análisis factorial con todas las variables numéricas y los componentes de los índices
+totalfactorial=total[,c(3:6,10:14,16:20)]
+#creo una nueva data con las puntuaciones Z. 
+totalfactoria_z=scale(totalfactorial)
+##comprobamos que la media es 0, ya que esta es una propiedad de la estandarización de las variables. 
+summary(totalfactoria_z)
+library(psych)
+#correlación
+corpearson=cor(totalfactoria_z)
+#Test de Barlett
+#observamos la matriz de correlación
+cor.plot(corpearson,numbers = T,upper = FALSE,main = "correlation",show.legend = FALSE)
+##Ahora, aplicamos el Kyser-Meyer-Olkin
+KMO(totalfactoria_z)
+#iba fa.parallel pero por alguna razón no corre
+```
+
+```{r}
+fa.parallel(totalfactoria_z)
+```
+
+```{r}
+totalfactoria_z_f=fa(totalfactoria_z,nfactors = 2,rotate="varimax")
+#de acuerdo a este análisis factorial, las variables del Global Gender Gap oscila entre el factor MR1 y el MR2, los cuales, sobre la base de los componentes que se agrupan en cada uno de ellos, son las dimensiones de democracia y desarrollo humano. además, la variable de cobertura de salud se va hacia el factor de desarrollo humano.
+
+#communalities, uniqueness y complexity
+sort(totalfactoria_z_f$communalities)
+
+sort(totalfactoria_z_f$uniquenesses)
+
+##participación política y oportunidades, salud y supervivencia, y empoderamiento político son las que menos se correlacinan con todas las demás.
+
+sort(totalfactoria_z_f$complexity)
+
+
+##variable cultura política y funcionalidad tienen el complexity más alto
+##porcentaje de cobertura se define más en una dimensión (hdi)
+fa.diagram(totalfactoria_z_f)
+
+ 
+
+
+```
+
+#factorial de variable Global Gender Gap
+```{r}
+gggfactorial=total[,3:6]
+```
+```{r}
+gggfactorial_z=scale(gggfactorial)
+pearsongggfactorial=cor(gggfactorial_z)
+cor.plot(pearsongggfactorial,numbers = T,upper = FALSE,main = "Correlation",show.legend = FALSE)
+KMO(gggfactorial_z)
+fa.parallel(gggfactorial_z)
+
+```
+```{r}
+gggfactorial_z_f=fa(gggfactorial_z,nfactors = 1,rotate="varimax") #queremos formar un factor
+gggfactorial_z_f$loadings
+
+```
+```{r}
+sort(gggfactorial_z_f$communalities)
+sort(gggfactorial_z_f$uniquenesses)
+sort(gggfactorial_z_f$complexity)
+```
+```{r}
+fa.diagram(gggfactorial_z_f)
+```
+
+```{r}
+##CREAMOS EL SOCRE DE GLOBAL GENDER GAP 
+gggscore=as.data.frame(gggfactorial_z_f$scores)
+names(gggscore)="GGGscore"
+```
+
+#factorial de Indice de desarrollo humano
+```{r}
+hdifactorial=total[,16:19]
+hdifactorial_z=scale(hdifactorial)
+pearsonhdifactorial=cor(hdifactorial_z)
+cor.plot(pearsonhdifactorial,numbers = TRUE,upper = FALSE,main = "correlation",show.legend = FALSE)
+KMO(hdifactorial_z)
+
+```
+```{r}
+fa.parallel(hdifactorial_z)
+```
+```{r}
+hdifactorial_z_f=fa(hdifactorial_z,nfactors = 1,rotate="varimax")
+hdifactorial_z_f$loadings
+fa.diagram(hdifactorial_z_f)
+```
+```{r}
+sort(hdifactorial_z_f$communalities)
+sort(hdifactorial_z_f$uniqueness)
+sort(hdifactorial_z_f$complexity)
+```
+
+```{r}
+scorehdi=as.data.frame(hdifactorial_z_f$scores)
+names(scorehdi)="HDIscore"
+```
+
+#factorial de indice de democracia
+```{r}
+demofactorial=total[,c(10:14)]
+demofactorial_z=scale(demofactorial)
+pearsondemo=cor(demofactorial_z)
+cor.plot(pearsondemo,numbers = T,upper=F,main="correlations",show.legend = FALSE)
+```
+```{r}
+KMO(demofactorial_z)
+fa.parallel(demofactorial_z)
+```
+```{r}
+demofactorial_z_f=fa(demofactorial_z,nfactors = 1,rotate = "varimax")
+demofactorial_z_f$loadings
+fa.diagram(demofactorial_z_f)
+```
+
+```{r}
+sort(demofactorial_z_f$communalities)
+sort(demofactorial_z_f$uniqueness)
+sort(demofactorial_z_f$complexity)
+```
+
+```{r}
+#quitando cultura
+demofactorial2=total[,c(10,11,12,14)]
+demofactorial2_z=scale(demofactorial2)
+demofactorial2_z_f=fa(demofactorial2_z,nfactors=1,rotate = "varimax")
+demofactorial2_z_f$loadings
+
+
+```
+
+```{r}
+#creando score sin cultura
+scoredemocracia=as.data.frame(demofactorial2_z_f$scores)
+names(scoredemocracia)="scoredemocracia" ##creamos el nuevo score!
+```
+
+#merge nuevos scores
+```{r}
+#GGG
+total$Pais=row.names(total)
+gggscore$Pais=row.names(gggscore)
+totalconscores=merge(total,gggscore,by="Pais")
+##AGREGAMOS EL SCORE DE HDI 
+scorehdi$Pais=row.names(scorehdi)
+totalconscores=merge(totalconscores,scorehdi,by="Pais")
+##scoredemo
+scoredemocracia$Pais=row.names(scoredemocracia)
+totalconscores=merge(totalconscores,scoredemocracia,by="Pais")
+```
+
+#mapa de similitudes con los componentes de la variables de indice de democracia e indice de desarrollo humano
+
+```{r}
+datamapadesyc=totalconscores[,c(1,11,12,13,15,17,18,19,20)]
+row.names(datamapadesyc)=datamapadesyc$Pais
+datamapadesyc$Pais=NULL
+datamapadesyc_s=scale(datamapadesyc) ##distancia de la data estandarizada
+datamapadesyc_s_d=dist(datamapadesyc_s)
+datamapadesyc_m=cmdscale(datamapadesyc_s_d,eig = TRUE,k=2)
+datamapadesyc_m$GOF
+rownames(datamapadesyc_m$points)
+plot(x, y, xlab="Dimensión 1", ylab="Dimensión 2", main=titulo, 
+     type="n") 
+text(x, y,labels = rownames(datamapadesyc_m$points),cex=0.6) 
+```
+
+#conglomerados
+
+```{r}
+datamapadesyc_s_clus=kmeans(datamapadesyc_s,centers = 5)
+
+table(datamapadesyc_s_clus$cluster)
+```
+```{r}
+datamapadesyc_m_DF=as.data.frame(datamapadesyc_m$points)
+```
+```{r}
+#mapa de similitudes con conglomerados
+library(ggplot2)
+datamapadesyc_m_DF$cluster=as.factor(datamapadesyc_s_clus$cluster)
+base=ggplot(datamapadesyc_m_DF,aes(x=V1,y=V2))
+base+geom_point(aes(colour=cluster))+geom_text(aes(label=row.names(datamapadesyc_m_DF)),size=2)
+
+```
+
+
+
+```{r}
+#mapa de conglomerados
+archivomapa='Cuaderno Marcela'
+fileName='world_map.shp' 
+fileToRead=file.path(archivomapa,fileName)
+library(rgdal)
+mapamundo=readOGR(fileToRead,stringsAsFactors=FALSE)
+plot(mapamundo, border='black')
+paisclus=as.data.frame(datamapadesyc_s_clus$cluster)
+paisclus
+names(paisclus)='cluster'
+paisclus$NAME=row.names(paisclus)
+head(paisclus)
+mapamundo_hdidemo=merge(mapamundo,paisclus)
+myColors=rainbow(5)
+plot(mapamundo,col='grey',border=NA)
+plot(mapamundo_hdidemo,col=myColors[mapamundo_hdidemo$cluster],main='Grupos',border=NA,add=T)
+```
+
+#regresion 
+```{r}
+##regresiones bivariadas
+#GGGscore
+model2=ologit.reg(abortoordinal~GGGscore,data=totalconscores)
+summary(model2)
+(model2m=margins.oglmx(model2,ascontinuous = T)) 
+```
+```{r}
+##HDIscore
+model3=ologit.reg(abortoordinal~HDIscore,data=totalconscores)
+summary(model3)
+(model3m=margins.oglmx(model3,ascontinuous = T)) 
+```
+```{r}
+#Scoredemocracia
+model4=ologit.reg(abortoordinal~scoredemocracia,data=totalconscores)
+summary(model4)
+(model4m=margins.oglmx(model4,ascontinuous = T)) 
+```
+```{r}
+#religion 
+model5=ologit.reg(abortoordinal~religion,data=totalconscores)
+summary(model5)
+(model5m=margins.oglmx(model5,ascontinuous = T))
+```
+```{r}
+#laicidad 
+model6=ologit.reg(abortoordinal~laicidadordinal,data=totalconscores)
+summary(model6)
+(model6m=margins.oglmx(model6,ascontinuous = T,))
+```
+```{r}
+#cobertura de salud
+model7=ologit.reg(abortoordinal~cobertura,data=totalconscores)
+summary(model7)
+(model7m=margins.oglmx(model7,ascontinuous = T,))
+```
+
+```{r}
+##ahora, intentemos anaizar mediante una variable dicotómica, el impacto del catolicismo. 
+#catolicismo=1
+#otros=o
+totalconscorescato=totalconscores[,c(1,9)]
+names(totalconscorescato)=c("Pais","catolicismo")
+totalconscorescato[grep("Catolica",totalconscorescato$catolicismo),]=1
+totalconscorescato[grep("Musulmana|Shintoism||Judia|Protestante|Ortodoxa|Budista|Cristiana|luteranismo|Hindu",totalconscorescato$catolicismo),]=0
+names(totalconscorescato)="catolicismo"
+totalconscorescato$Pais=totalconscores$Pais
+totalconscorescato[,2]=NULL
+totalconscorescato$catolicismo=as.factor(totalconscorescato$catolicismo)
+totalconscores=merge(totalconscores,totalconscorescato,by="Pais")
+model8=ologit.reg(abortoordinal~catolicismo,data=totalconscores)
+summary(model8)
+(model8m=margins.oglmx(model8,ascontinuous = T,))
+```
+
+```{r}
+##ahora, evaluaremos el impacto de una variable dicotómica. si tiene o no tiene religión oficial.
+totalconscoresnolaico=totalconscores[,c(1,8)]
+
+names(totalconscoresnolaico)=c("Pais","nolaico")
+
+totalconscoresnolaico[grep("no tiene religion oficial|relación hostil",totalconscoresnolaico$nolaico),]=0  ##si favorece a una religión, no se considera como laico estrictamente 
+totalconscoresnolaico[grep("tiene religion oficial|favorece a una religion",totalconscoresnolaico$nolaico),]=1
+names(totalconscoresnolaico)="nolaico"
+totalconscoresnolaico$Pais=totalconscores$Pais
+totalconscoresnolaico[,2]=NULL
+totalconscoresnolaico$nolaico=as.factor(totalconscoresnolaico$nolaico)
+
+totalconscores=merge(totalconscores,totalconscoresnolaico,by="Pais")
+
+model9=ologit.reg(abortoordinal~nolaico,data=totalconscores)
+summary(model9)
+(model9m=margins.oglmx(model9,ascontinuous = TRUE,))
+```
+```{r}
+#regresiones multivariadas
+#creamos modelos con todas las variables independientes a considerar: abortoordinal (dependiente),laicidad, religion, scoreIDH,scoredemo,scoreggg,cobertura de salud. 
+dataregre1=totalconscores[,c(1,2,8,9,21,22,23,24)]
+row.names(dataregre1)=dataregre1$Pais
+dataregre1$Pais=NULL
+model10=ologit.reg(abortoordinal~.,data=dataregre1)
+summary(model10)
+(model10m=margins.oglmx(model10,ascontinuous = T))
+```
+```{r}
+##modelo que solo considera scoreGGG, el score de idh,cobertura y el score de democracia, las cuales son las variables con resultado significativo. 
+dataregre2=totalconscores[,c(1,2,21,22,23,24)]
+row.names(dataregre2)=dataregre2$Pais
+dataregre2$Pais=NULL
+model11=ologit.reg(abortoordinal~.,data=dataregre2)
+summary(model11)
+(model11m=margins.oglmx(model11,ascontinuous = T))
+```
+```{r}
+#ahora, al modelo anterior, le añadimos las variables dicotomicas creadas a partir de laicidad del estado y religion mayoritaria
+datareger3=totalconscores[,c(1,2,21:26)]
+row.names(datareger3)=datareger3$Pais
+datareger3$Pais=NULL
+model12=ologit.reg(abortoordinal~.,data=datareger3)
+summary(model12)
+(model12m=margins.oglmx(model12,ascontinuous = T))
+```
+
+```{r}
+#probamos con todas las variables
+dataregre4=totalconscores[,c(1,2,8,9,21:26)]
+row.names(dataregre4)=dataregre4$Pais
+dataregre4$Pais=NULL
+model13=ologit.reg(abortoordinal~.,data=dataregre4)
+summary(model13)
+(model13m=margins.oglmx(model13,ascontinuous = T))
+```
+
+```{r}
+#ahora probamos sin HDI
+dataregre5=totalconscores[,c(1,2,8,9,21,22,24,25,26)]
+row.names(dataregre5)=dataregre4$Pais
+dataregre5$Pais=NULL
+model14=ologit.reg(abortoordinal~.,data=dataregre5)
+summary(model14)
+(model14m=margins.oglmx(model14,ascontinuous = T))
+
+```
+
+#regresion con nuevo score
+```{r}
+#factorial ihd considerando a cobertura como un componente
+factorialidh2=total[,c(16:20)]
+factorialidh2_z=scale(factorialidh2)
+pearsoidh2=cor(factorialidh2_z)
+cor.plot(factorialidh2_z,numbers = TRUE,upper = FALSE,main = "correlation",show.legend = FALSE)
+KMO(factorialidh2_z)
+```
+```{r}
+factorialidh2_z_f=fa(factorialidh2_z,nfactors = 1,rotate = "varimax")
+factorialidh2_z_f$loadings
+fa.diagram(factorialidh2_z_f)
+```
+```{r}
+sort(factorialidh2_z_f$communalities)
+sort(factorialidh2_z_f$uniqueness)
+sort(factorialidh2_z_f$complexity)
+```
+```{r}
+scoreidh2=as.data.frame(factorialidh2_z_f$scores)
+names(scoreidh2)="scoreidh2"
+```
+```{r}
+total$Pais=row.names(total)
+scoreidh2$Pais=row.names(scoreidh2)
+totalconscores=merge(totalconscores,scoreidh2,by="Pais")
+```
+```{r}
+dataregre6=totalconscores[,c(1,2,8,9,22,24,27)]
+row.names(dataregre6)=dataregre6$Pais
+dataregre6$Pais=NULL
+model15=ologit.reg(abortoordinal~.,data=dataregre6)
+summary(model15)
+(model15m=margins.oglmx(model15,ascontinuous = T))
+   
+```
+
+```{r}
+#PROBAMOS SIN idh2
+dataregre7=totalconscores[,c(1,2,8,9,22,24)]
+row.names(dataregre7)=dataregre7$Pais
+dataregre7$Pais=NULL
+model16=ologit.reg(abortoordinal~.,data=dataregre7)
+summary(model16)
+(model16m=margins.oglmx(model16,ascontinuous = T))
+```
+
+
+
